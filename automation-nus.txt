@@ -1,0 +1,3 @@
+﻿connect 01E95077FE4E51
+disconnect
+scan

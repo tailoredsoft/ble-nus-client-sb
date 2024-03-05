@@ -14,6 +14,28 @@
 //
 // SPDX-License-Identifier:ISC
 //
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// This application inherits from Laird's sample application. It modifies the
+// bevavior so that it connects to the Nordic NUS service UUID and uses only
+// TX and RX characteristics. It specifically targets Laird's BL654-USB adapter
+// but may work with other modules.
+//
+// Note: As it derives from the Laird VSP implementation which has optional 
+// modem-in and modem-out charcateristics, this implmentation caters for that 
+// too. If the modem-in/modem-out characteristics are missing in the server then
+// the behaviour is as per the NUS behaviour.
+// If implemented, then the UUIDs for them are as per MIUUID & MOUUID #defines
+// as below.
+//
+//
+//
+#define APP_VERSION  "0.1"
+//
+// Version History:
+// 
+// 2024-03-03 Cloned from $autorun$.VSP.UART.bridge.outgoing.sb
+//
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // +++++                                                                      ++
 // +++++  When UwTerminal downloads the app it will store it as a filenname   ++
@@ -21,8 +43,8 @@
 // +++++                                                                      ++
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
-// BL654 custom VSP service: This application will connect to a VSP service and
-//                           allow communication to that server from the UART.
+// BL654 VSP service: This application will connect to a Nordic NUS service and
+//                    allow communication to that server from the UART.
 //
 //******************************************************************************
 // This app provides for a command interface over the uart for testing VSP and
@@ -36,11 +58,11 @@
 //              (4) #INTaaaa# means a number in decimal, hex, octal or binary
 //                      format -> 23 == 0x17 == h'17 == o'23 == b'10111
 //                      aaaa is just a description
-//              (5) #HEXaaaa# means a string without delimitors consisting of hex
+//              (5) #HEXaaaa# means a string WITHOUT delimitors consisting of hex
 //                      characters only aaaa is just a description
-//              (6) #STRaaaa# means a string without delimitors
+//              (6) #STRaaaa# means a string WITHOUT delimitors
 //                      aaaa is just a description
-//              (7) "STRaaaa" means a string which must have the " delimitor
+//              (7) "STRaaaa" means a string which MUST HAVE the " delimitor
 //                      aaaa is just a description
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
@@ -49,8 +71,8 @@
 //   - Start a scan using the timeout #SCAN_TMT#
 //
 // -----------------------------------------------------------------------------
-// atd #HEXbdAddr7bytes# OR
-// connect #HEXbdAddr7bytes# OR
+// atd #HEXbdAddr7bytes#
+// connect #HEXbdAddr7bytes#
 //    - Connect to device with given BT address
 //
 //    -> if an invalid or null BT address is given, the default mac address
@@ -123,25 +145,29 @@
 // *Instructions*
 //      1. Set BTAddr to the BT Address of the peer device you want to connect to by default
 //      2. Set CONNECT_ON_STARTUP to 1 to automatically connect
-//      3. Start a VSP server on a BT900/BL600/BL652/BL654 with the other VSP application (on github) or by bridging SIO_19 to GND to enable command VSP mode (bridge SIO_7 to VCC on a BL600 development kit)
-//      4. Download and run this application to a BT900/BL652/BL654 and it will automatically connect to the VSP server
+//      3. Start a NUS server 
+//      4. Download and run this application to a BL654 and it will automatically connect to the NUS server
+//         or on command.
 //
 //
 // ::Note::
 //      - Upon connection, the module will automatically switch to bridge mode. Any data arriving
-//        at the VSP port will be sent to the UART and vice versa.
+//        at the VSP(NUS) port will be sent to the UART and vice versa.
 //
 //        -> To switch back to command mode so the module can accept commands again, assert the
 //           nAutorun pin. This can be done by unticking DTR in UwTerminal. Switch back to bridge mode
-//           by deasserting the nAutorun pin - ticking DTR in UwTerminal. This can also be done by
-//           pressing the caret "^" key 3 times with LineMode disabled.
+//           by deasserting the nAutorun pin - ticking DTR in UwTerminal. 
 //
-//        -> Make sure the jumper on J12 is on pins 1-2 if using a DVK kit.
+//           This can also be done by pressing the caret "^" key 3 times with LineMode in UwTerminal disabled.
+//
+//        -> Make sure the jumper on J12 is on pins 1-2 if using the BL654 DVK kit.
 //
 //******************************************************************************
 
-//This is the target Bluetooth device to connect to, 7 bytes in hex
-#define BTAddr "000016A4093D8A"
+// This is the target Bluetooth device to connect to, 7 bytes in hex and will only be
+// used if CONNECT_ON_STARTUP is set to 1
+//#define BTAddr "000016A4093D8A"
+#define BTAddr "01E95077FE4E51"
 
 //******************************************************************************
 // Definitions
@@ -150,11 +176,10 @@
 #define CONNECT_ON_STARTUP              0
 
         //BLE Scan config parameters
-#define SCAN_TMT                        20000   //Scan timeout in mS
+#define SCAN_TMT                        5000   //Scan timeout in mS
 
         //Set this to 0 to disable all debugging messages
 #define ENABLE_DEBUG_PRINTS             1
-#define APP_VERSION                     "1.0"
         //Size of i[]
 #define NUM_OF_I_PARAMS                 (5)
         //Size of s$[]
@@ -172,12 +197,14 @@
 #define CMD_MODE                        0
 #define BRIDGE_VSP_MODE                 1
 
-//UUIDs
-#define BASEUUID      "\56\9a\11\01\b8\7f\49\0c\92\cb\11\ba\5e\a5\16\7c"  //VSP base UUID
-#define MIUUID        "\56\9a\20\03\b8\7f\49\0c\92\cb\11\ba\5e\a5\16\7c"  //Modem in UUID
-#define MOUUID        "\56\9a\20\02\b8\7f\49\0c\92\cb\11\ba\5e\a5\16\7c"  //Modem out UUID
-#define RXUUID        "\56\9a\20\01\b8\7f\49\0c\92\cb\11\ba\5e\a5\16\7c"  //Receive VSP UUID
-#define TXUUID        "\56\9a\20\00\b8\7f\49\0c\92\cb\11\ba\5e\a5\16\7c"  //Transmit VSP UUID
+//NORDIC NUS UUIDs
+#define BASEUUID      "\6e\40\00\01\b5\a3\f3\93\e0\a9\e5\0e\24\dc\ca\9e"  //NUS base UUID
+#define RXUUID        "\6e\40\00\02\b5\a3\f3\93\e0\a9\e5\0e\24\dc\ca\9e"  //Receive NUS UUID
+#define TXUUID        "\6e\40\00\03\b5\a3\f3\93\e0\a9\e5\0e\24\dc\ca\9e"  //Transmit NUS UUID
+#define MIUUID        "\6e\40\de\ad\b5\a3\f3\93\e0\a9\e5\0e\24\dc\ca\9e"  //Modem in UUID (Extension)
+#define MOUUID        "\6e\40\be\ef\b5\a3\f3\93\e0\a9\e5\0e\24\dc\ca\9e"  //Modem out UUID (Extension)
+
+
 #define BT900_DEV_ID  0x42370900
 #define BL620_DEV_ID  0x424C0620
 
@@ -210,7 +237,16 @@
 //******************************************************************************
 dim rc                                       //Result code
 dim BleHandle                                //Ble Connection Handle
-dim Mode : Mode = 0                          //Current program mode: 0 = connecting, 1 = connected, find modem in characteristic, 2 = find modem out characteristic, 3 = find RX characteristic, 4 = find TX characteristic, 5 = find modem out descriptor, 6 = find TX descriptor, 7 = enable modem out notIFications, 8 = enable TX, 9 = enable modem in status
+dim Mode : Mode = 0                          //Current program mode: 0 = connecting, 
+                                             //                      1 = connected, find modem in characteristic, 
+											 //                      2 = find modem out characteristic, 
+											 //                      3 = find RX characteristic, 
+											 //                      4 = find TX characteristic, 
+											 //                      5 = find modem out descriptor, 
+											 //                      6 = find TX descriptor, 
+											 //                      7 = enable modem out notIFications, 
+											 //                      8 = enable TX, 
+											 //                      9 = enable modem in status
 dim MIHandle                                 //Modem In handle (IF one exists)
 dim MOHandle                                 //Modem Out handle (IF one exists)
 dim RXHandle                                 //RX handle
