@@ -316,6 +316,7 @@ endfunc -3  //Don't give response to user
 function SwitchToCmd()
     //If ^ was sent after the delay time (valid) increment the counter
     if TimerRunning(CARET_TIMER)==0 then
+        print " "
         carCnt = carCnt + 1
         if carCnt<3 then
             TimerStart(CARET_TIMER,CARET_TIMER_DUR_MS,0)
