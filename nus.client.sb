@@ -377,33 +377,7 @@ ENDFUNC 1
 //Characteristic found
 //==============================================================================
 FUNCTION HndlrFindChar(cHndl,cProp,hVal,isUuid)
-    IF (ModemMode == 1) THEN
-        //Modem in
-        IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
-            //No modem in/out characteristics
-            ModemInOutExists = 0
-            ModemMode = 3
-            UUID1$ = BASEUUID
-            UUID2$ = RXUUID
-            rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
-            AssertRC(rc, 325)
-        ELSE
-            MIHandle = hVal
-            ModemMode = 2
-            UUID1$ = BASEUUID
-            UUID2$ = MOUUID
-            rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
-            AssertRC(rc, 332)
-        ENDIF
-    ELSEIF (ModemMode == 2) THEN
-        //Modem out
-        MOHandle = hVal
-        ModemMode = 3
-        UUID1$ = BASEUUID
-        UUID2$ = RXUUID
-        rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
-        AssertRC(rc, 341)
-    ELSEIF (ModemMode == 3) THEN
+    IF (ModemMode == 3) THEN
         //RX
         IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
             //Characteristic not found
@@ -425,13 +399,80 @@ FUNCTION HndlrFindChar(cHndl,cProp,hVal,isUuid)
             rc = _disconnect()
             PRINT "VSP TX characteristic was not found, disconnected.\n"
         ELSE
-            //Characteristic found
+            //Characteristic found, so check for modem chars
             TXHandle = hVal
-            ModemMode = 5
+            ModemMode = 1
+            UUID1$ = BASEUUID
+            UUID2$ = MIUUID
+            rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
+            AssertRC(rc, 408)
+        ENDIF
+    ELSEIF (ModemMode == 1) THEN
+        //Modem in
+        IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
+            //No modem in/out characteristics
+            ModemInOutExists = 0
+			ModemMode = 6
+			UUID1$ = BASEUUID
+			UUID2$ = TXUUID
+			rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
+            AssertRC(rc, 420)
+        ELSE
+            MIHandle = hVal
+            ModemMode = 2
             UUID1$ = BASEUUID
             UUID2$ = MOUUID
-            rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
-            AssertRC(rc, 370)
+            rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
+            AssertRC(rc, 332)
+        ENDIF
+    ELSEIF (ModemMode == 2) THEN
+        //Modem out
+        IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
+            //No modem in/out characteristics
+            ModemInOutExists = 0
+			ModemMode = 6
+			UUID1$ = BASEUUID
+			UUID2$ = TXUUID
+			rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
+            AssertRC(rc, 420)
+        ELSE
+			MOHandle = hVal
+			ModemMode = 5
+			UUID1$ = BASEUUID
+			UUID2$ = MOUUID
+			rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
+			AssertRC(rc, 341)
+	    ENDIF
+    ENDIF
+ENDFUNC 1
+
+//==============================================================================
+//CCCD Descriptor found
+//==============================================================================
+FUNCTION HndlrFindDesc(nCtx, Hndl)
+    IF (ModemMode == 5) THEN
+        //Modem out CCCD
+        MOCCCDHandle = Hndl
+        ModemMode = 6
+        UUID1$ = BASEUUID
+        UUID2$ = TXUUID
+        rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
+    ELSEIF (ModemMode == 6) THEN
+        //TX CCCD
+        TXCCCDHandle = Hndl
+        ModemMode = 7
+
+        IF (ModemInOutExists == 1) THEN
+            //Enable modem out notifications
+            UUID1$ = "\01\00"
+            rc = BLEGATTCWRITE(BleHandle, MOCCCDHandle, UUID1$)
+            AssertRC(rc, 506)
+        ELSE
+            //Modem in doesn't exist - enable TX notifications
+            ModemMode = 8
+            UUID1$ = "\01\00"
+            rc = BLEGATTCWRITE(BleHandle, TXCCCDHandle, UUID1$)
+            AssertRC(rc, 512)
         ENDIF
     ENDIF
 ENDFUNC 1
@@ -548,37 +589,6 @@ FUNCTION HndlrUartTxEmpty()
 ENDFUNC 1
 
 //==============================================================================
-//CCCD Descriptor found
-//==============================================================================
-FUNCTION HndlrFindDesc(nCtx, Hndl)
-    IF (ModemMode == 5) THEN
-        //Modem out CCCD
-        MOCCCDHandle = Hndl
-        ModemMode = 6
-        UUID1$ = BASEUUID
-        UUID2$ = TXUUID
-        rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
-    ELSEIF (ModemMode == 6) THEN
-        //TX CCCD
-        TXCCCDHandle = Hndl
-        ModemMode = 7
-
-        IF (ModemInOutExists == 1) THEN
-            //Enable modem out notifications
-            UUID1$ = "\01\00"
-            rc = BLEGATTCWRITE(BleHandle, MOCCCDHandle, UUID1$)
-            AssertRC(rc, 506)
-        ELSE
-            //Modem in doesn't exist - enable TX notifications
-            ModemMode = 8
-            UUID1$ = "\01\00"
-            rc = BLEGATTCWRITE(BleHandle, TXCCCDHandle, UUID1$)
-            AssertRC(rc, 512)
-        ENDIF
-    ENDIF
-ENDFUNC 1
-
-//==============================================================================
 //BLE characteristics data changed
 //==============================================================================
 FUNCTION HndlrAttrRead(nCtx, Hndl, Stat)
@@ -628,10 +638,10 @@ FUNCTION HndlrBleMsg(nMsgId, nCtx)
         rc = BleGattcOpen(256, 0)
         AssertRC(rc, 565)
         BleHandle = nCtx
-        ModemMode = 1
+        ModemMode = 3
         dim UUID1$, UUID2$
         UUID1$ = BASEUUID
-        UUID2$ = MIUUID
+        UUID2$ = RXUUID
         rc = BLEGATTCFINDCHAR(nCtx, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
         AssertRC(rc, 572)
         PRINT "Connected!\n"
