@@ -303,11 +303,11 @@ ENDSUB
 //#CMD#//  ath OR disconnect
 //-------------------------------------------------------------------------
 function _disconnect()
-rc = BLEDISCONNECT(BleHandle)
+	rc = BLEDISCONNECT(BleHandle)
     if rc!=0 then
         exitfunc rc
     endif
-endfunc -3  //Don't give response to user
+endfunc -1  //Don't give response to user
 
 //-------------------------------------------------------------------------
 // Process a caret character ^ do decide whether or not to switch to command mode
@@ -508,7 +508,7 @@ FUNCTION HndlrAttrWrite(cHndl,aHndl,nSts)
             ModemStat = 1
             u$ = ""
             RecBuf$ = ""
-            print "Ready to transmit/receive!\n"
+			PRINT "\n\rCONNECT\n\r"
             rc = SendMsgApp(0,BRIDGE_VSP_MODE)
         ENDIF
     ELSEIF (ModemMode == 9) THEN
@@ -518,7 +518,7 @@ FUNCTION HndlrAttrWrite(cHndl,aHndl,nSts)
         ModemMode = 10
         u$ = ""
         RecBuf$ = ""
-        print "Ready to transmit/receive!\n"
+		PRINT "\n\rCONNECT\n\r"
         rc = SendMsgApp(0,BRIDGE_VSP_MODE)
     ELSEIF (ModemMode == 10) THEN
         //UART data was written
@@ -644,7 +644,6 @@ FUNCTION HndlrBleMsg(nMsgId, nCtx)
         UUID2$ = RXUUID
         rc = BLEGATTCFINDCHAR(nCtx, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
         AssertRC(rc, 572)
-        PRINT "Connected!\n"
         InConnection = 1
 
         //Encrypt the connection if previously bonded with this device
@@ -658,7 +657,7 @@ FUNCTION HndlrBleMsg(nMsgId, nCtx)
 
     ELSEIF (nMsgId == BLE_EVBLEMSGID_DISCONNECT) then
         //Disconnected!
-        PRINT "\nDisconnected!\n"
+        PRINT "\n\rNOCARRIER\n\r"
         InConnection = 0
         BleGattcClose()
         rc = SendMsgApp(0,CMD_MODE)
@@ -689,6 +688,7 @@ function ClearI()
 endfunc 0
 
 //------------------------------------------------------------------------------
+// rsp=-1 will mean no response
 //------------------------------------------------------------------------------
 sub UartRsp(rsp as integer)
     if rsp == 0 then
@@ -989,7 +989,7 @@ function SetMode(msgID, cmd) as integer
         endif
 
         ONEVENT EVUARTRX        CALL HndlrUartRxVSP
-        print ok$;"\n"
+        //print ok$;"\n"
     elseif cmd==CMD_MODE then
         ONEVENT  EVUARTRX       CALL HndlrUartRxCmd
         UartRsp(0)
