@@ -237,7 +237,7 @@
 //******************************************************************************
 dim rc                                       //Result code
 dim BleHandle                                //Ble Connection Handle
-dim Mode : Mode = 0                          //Current program mode: 0 = connecting, 
+dim ModemMode : ModemMode = 0                //Current program mode: 0 = connecting, 
                                              //                      1 = connected, find modem in characteristic, 
 											 //                      2 = find modem out characteristic, 
 											 //                      3 = find RX characteristic, 
@@ -247,6 +247,7 @@ dim Mode : Mode = 0                          //Current program mode: 0 = connect
 											 //                      7 = enable modem out notIFications, 
 											 //                      8 = enable TX, 
 											 //                      9 = enable modem in status
+											 //                     10 = vsp operation mode
 dim MIHandle                                 //Modem In handle (IF one exists)
 dim MOHandle                                 //Modem Out handle (IF one exists)
 dim RXHandle                                 //RX handle
@@ -376,33 +377,33 @@ ENDFUNC 1
 //Characteristic found
 //==============================================================================
 FUNCTION HndlrFindChar(cHndl,cProp,hVal,isUuid)
-    IF (Mode == 1) THEN
+    IF (ModemMode == 1) THEN
         //Modem in
         IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
             //No modem in/out characteristics
             ModemInOutExists = 0
-            Mode = 3
+            ModemMode = 3
             UUID1$ = BASEUUID
             UUID2$ = RXUUID
             rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
             AssertRC(rc, 325)
         ELSE
             MIHandle = hVal
-            Mode = 2
+            ModemMode = 2
             UUID1$ = BASEUUID
             UUID2$ = MOUUID
             rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
             AssertRC(rc, 332)
         ENDIF
-    ELSEIF (Mode == 2) THEN
+    ELSEIF (ModemMode == 2) THEN
         //Modem out
         MOHandle = hVal
-        Mode = 3
+        ModemMode = 3
         UUID1$ = BASEUUID
         UUID2$ = RXUUID
         rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
         AssertRC(rc, 341)
-    ELSEIF (Mode == 3) THEN
+    ELSEIF (ModemMode == 3) THEN
         //RX
         IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
             //Characteristic not found
@@ -411,13 +412,13 @@ FUNCTION HndlrFindChar(cHndl,cProp,hVal,isUuid)
         ELSE
             //Characteristic found
             RXHandle = hVal
-            Mode = 4
+            ModemMode = 4
             UUID1$ = BASEUUID
             UUID2$ = TXUUID
             rc = BLEGATTCFINDCHAR(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0)
             AssertRC(rc, 355)
         ENDIF
-    ELSEIF (Mode == 4) THEN
+    ELSEIF (ModemMode == 4) THEN
         //TX
         IF (cProp == 0 && hVal == 0 && isUuid == 0) THEN
             //Characteristic not found
@@ -426,7 +427,7 @@ FUNCTION HndlrFindChar(cHndl,cProp,hVal,isUuid)
         ELSE
             //Characteristic found
             TXHandle = hVal
-            Mode = 5
+            ModemMode = 5
             UUID1$ = BASEUUID
             UUID2$ = MOUUID
             rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
@@ -445,16 +446,16 @@ FUNCTION HndlrAttrWrite(cHndl,aHndl,nSts)
         exitfunc 1
     endif
 
-    IF (Mode == 7) THEN
+    IF (ModemMode == 7) THEN
         //Enable TX notIFications
-        Mode = 8
+        ModemMode = 8
         UUID1$ = "\01\00"
         rc = BLEGATTCWRITE(BleHandle, TXCCCDHandle, UUID1$)
         AssertRC(rc, 390)
-    ELSEIF (Mode == 8) THEN
+    ELSEIF (ModemMode == 8) THEN
         //Write to Modem In
         IF (ModemInOutExists == 1) THEN
-            Mode = 9
+            ModemMode = 9
             UUID1$ = "\01"
             BufferFull = 0
             rc = BLEGATTCWRITE(BleHandle, MIHandle, UUID1$)
@@ -462,23 +463,23 @@ FUNCTION HndlrAttrWrite(cHndl,aHndl,nSts)
         ELSE
             BufferFull = 0
             BufferState = 0
-            Mode = 10
+            ModemMode = 10
             ModemStat = 1
             u$ = ""
             RecBuf$ = ""
             print "Ready to transmit/receive!\n"
             rc = SendMsgApp(0,BRIDGE_VSP_MODE)
         ENDIF
-    ELSEIF (Mode == 9) THEN
+    ELSEIF (ModemMode == 9) THEN
         //Now ready to send data
         BufferFull = 0
         BufferState = 0
-        Mode = 10
+        ModemMode = 10
         u$ = ""
         RecBuf$ = ""
         print "Ready to transmit/receive!\n"
         rc = SendMsgApp(0,BRIDGE_VSP_MODE)
-    ELSEIF (Mode == 10) THEN
+    ELSEIF (ModemMode == 10) THEN
         //UART data was written
         BufferState = 0
         rc = HndlrUartRxVSP()
@@ -550,17 +551,17 @@ ENDFUNC 1
 //CCCD Descriptor found
 //==============================================================================
 FUNCTION HndlrFindDesc(nCtx, Hndl)
-    IF (Mode == 5) THEN
+    IF (ModemMode == 5) THEN
         //Modem out CCCD
         MOCCCDHandle = Hndl
-        Mode = 6
+        ModemMode = 6
         UUID1$ = BASEUUID
         UUID2$ = TXUUID
         rc = BLEGATTCFINDDESC(BleHandle, BleHandleUuid128(UUID1$), 0, BleHandleUuid128(UUID2$), 0, 0xFE012902, 0)
-    ELSEIF (Mode == 6) THEN
+    ELSEIF (ModemMode == 6) THEN
         //TX CCCD
         TXCCCDHandle = Hndl
-        Mode = 7
+        ModemMode = 7
 
         IF (ModemInOutExists == 1) THEN
             //Enable modem out notifications
@@ -569,7 +570,7 @@ FUNCTION HndlrFindDesc(nCtx, Hndl)
             AssertRC(rc, 506)
         ELSE
             //Modem in doesn't exist - enable TX notifications
-            Mode = 8
+            ModemMode = 8
             UUID1$ = "\01\00"
             rc = BLEGATTCWRITE(BleHandle, TXCCCDHandle, UUID1$)
             AssertRC(rc, 512)
@@ -627,7 +628,7 @@ FUNCTION HndlrBleMsg(nMsgId, nCtx)
         rc = BleGattcOpen(256, 0)
         AssertRC(rc, 565)
         BleHandle = nCtx
-        Mode = 1
+        ModemMode = 1
         dim UUID1$, UUID2$
         UUID1$ = BASEUUID
         UUID2$ = MIUUID
@@ -654,7 +655,7 @@ FUNCTION HndlrBleMsg(nMsgId, nCtx)
 
     elseif (nMsgId == BLE_EVBLEMSGID_NEW_BOND) then
         //Start process of writing characteristics and descriptors from the beginning
-        Mode = 6
+        ModemMode = 6
         exitfunc HndlrFindDesc(0, TXCCCDHandle)
     ENDIF
 ENDFUNC 1
